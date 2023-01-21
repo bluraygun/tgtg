@@ -171,7 +171,7 @@ def toogoodtogo():
 
     # Get all favorite items
     api_response = tgtg_client.get_items(
-        favorites_only=False,
+        favorites_only=True,
         latitude=config['location']['lat'],
         longitude=config['location']['long'],
         radius=config['location']['range'],
@@ -240,115 +240,6 @@ def toogoodtogo():
     # for item in parsed_api:
     #     print(f"{item['store_name']}({item['id']}): {item['items_available']}")
 
-def parse_foodsi_api(api_result):
-    """
-    For fideling out the few important information out of the api response
-    """
-    new_api_result = list()
-    # Go through all favorites linked to the account,that are returned with the api
-    for restaurant in api_result['data']:
-        current_item = restaurant
-        current_item['opened_at'] = dateutil.parser.parse(restaurant['package_day']['collection_day']['opened_at']).strftime('%H:%M')
-        current_item['closed_at'] = dateutil.parser.parse(restaurant['package_day']['collection_day']['closed_at']).strftime('%H:%M')
-        if (restaurant['package_day']['meals_left'] is None):
-            current_item['package_day']['meals_left'] = 0
-        new_api_result.append(current_item)
-
-    return new_api_result
-def foodsi():
-    """
-    Retrieves the data from foodsi API and selects the message to send.
-    """
-    items = list()
-    page = 1
-    totalpages = 1
-    while page <= totalpages:
-        req_json = {
-            "page": page,
-            "per_page": 15,
-            "distance": {
-                "lat": config['location']['lat'],
-                "lng": config['location']['long'],
-                "range": config['location']['range']*1000
-            },
-            "hide_unavailable": False,
-            "food_type": [],
-            "collection_time": {
-                "from": "00:00:00",
-                "to": "23:59:59"
-            }
-        }
-        foodsi_api = requests.post('https://api.foodsi.pl/api/v2/restaurants', headers = {'Content-type':'application/json', 'system-version':'android_3.0.0', 'user-agent':'okhttp/3.12.0'}, data = json.dumps(req_json))
-        items += parse_foodsi_api(foodsi_api.json())
-        # print("Foodsi current page: " + str(foodsi_api.json()['current_page']))
-        # print("Foodsi total pages: " + str(foodsi_api.json()['total_pages']))
-        totalpages = foodsi_api.json()['total_pages']
-        # print("Foodsi page count: " + str(len(foodsi_api.json()['data'])))
-        page += 1
-    print("Foodsi total items: " + str(len(items)))
-    # Get the global variable of items in stock
-    global foodsi_in_stock
-
-    # Go through all favourite items and compare the stock
-    for item in items:
-        try:
-            old_stock = [stock['package_day']['meals_left'] for stock in foodsi_in_stock if stock['id'] == item['id']][0]
-        except IndexError:
-            old_stock = 0
-        try:
-            item['msg_id'] = [stock['msg_id'] for stock in foodsi_in_stock if stock['id'] == item['id']][0]
-        except:
-            pass
-
-        new_stock = item['package_day']['meals_left']
-
-        # Check, if the stock has changed. Send a message if so.
-        if new_stock != old_stock:
-            # Check if the stock was replenished, send an encouraging image message
-            if old_stock == 0 and new_stock > 0:
-                #TODO: tommorrow date
-                message = f"🍽 There are {new_stock} new goodie bags at [{item['name']}]({item['url']})\n"\
-                f"_{item['meal']['description']}_\n"\
-                f"💰 *{item['meal']['price']}PLN*/{item['meal']['original_price']}PLN\n"\
-                f"⏰ {item['opened_at']}-{item['closed_at']}\n"\
-                "ℹ️ foodsi.pl"
-                # message += f"\ndebug id: {item['id']}"
-                tg = telegram_bot_sendimage(item['image']['url'], message)
-                try: 
-                    item['msg_id'] = tg['result']['message_id']
-                except:
-                    print(json.dumps(tg))
-                    print(item['image']['url'])
-                    print(message)
-                    print(traceback.format_exc())
-            elif old_stock > new_stock and new_stock != 0:
-                # customer feedback: This message is not needed
-                pass
-                ## Prepare a generic string, but with the important info
-                # message = f" 📉 Decrease from {old_stock} to {new_stock} available goodie bags at {[item['name'] for item in new_api_result if item['id'] == item_id][0]}."
-                # telegram_bot_sendtext(message)
-            elif old_stock > new_stock and new_stock == 0:
-                # message = f" ⭕ Sold out! There are no more goodie bags available at {item['name']}."
-                # telegram_bot_sendtext(message)
-                try: 
-                    tg = telegram_bot_delete_message([stock['msg_id'] for stock in foodsi_in_stock if stock['id'] == item['id']][0])
-                except:
-                    print(f"Failed to remove message for item id: {item['id']}")
-                    print(traceback.format_exc())
-            else:
-                # Prepare a generic string, but with the important info
-                message = f"There was a change of number of goodie bags in stock from {old_stock} to {new_stock} at {item['name']}."
-                telegram_bot_sendtext(message)
-
-    # Reset the global information with the newest fetch
-    foodsi_in_stock = items
-
-    # Print out some maintenance info in the terminal
-    print(f"Foodsi: API run at {time.ctime(time.time())} successful.")
-    # for item in foodsi_in_stock:
-    #     print(f"{item['name']}({item['id']}): {item['package_day']['meals_left']}")
-
-
 def still_alive():
     """
     This function gets called every 24 hours and sends a 'still alive' message to the admin.
@@ -363,7 +254,6 @@ def refresh():
     """
     try:
         toogoodtogo()
-        foodsi()
     except:
         print(traceback.format_exc())
         telegram_bot_sendtext("Error occured: \n```" + str(traceback.format_exc()) + "```")
