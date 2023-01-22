@@ -1,4 +1,4 @@
-from tgtg import TgtgClient
+from tgtg import TgtgClient, exceptions
 from json import load, dump
 import requests
 import schedule
@@ -95,7 +95,6 @@ except:
 
 # Init the favourites in stock list as a global variable
 tgtg_in_stock = list()
-foodsi_in_stock = list()
 
 
 def telegram_bot_sendtext(bot_message, only_to_admin=True):
@@ -170,13 +169,7 @@ def toogoodtogo():
     global tgtg_in_stock
 
     # Get all favorite items
-    api_response = tgtg_client.get_items(
-        favorites_only=True,
-        latitude=config['location']['lat'],
-        longitude=config['location']['long'],
-        radius=config['location']['range'],
-        page_size=300
-    )
+    api_response = tgtg_client.get_items(favorites_only=True)
 
     parsed_api = parse_tgtg_api(api_response)
 
@@ -244,7 +237,7 @@ def still_alive():
     """
     This function gets called every 24 hours and sends a 'still alive' message to the admin.
     """
-    message = f"Current time: {time.ctime(time.time())}. The bot is still running. "
+    message = f"Current time: {time.ctime(time.time())}. The bot is still running."
     telegram_bot_sendtext(message)
 
 def refresh():
@@ -254,16 +247,21 @@ def refresh():
     """
     try:
         toogoodtogo()
+    except exceptions.TgtgAPIError as e:
+        print(traceback.format_exc())
+        if e.args[0] == 403:
+            telegram_bot_sendtext("Scanning...")
+
     except:
         print(traceback.format_exc())
         telegram_bot_sendtext("Error occured: \n```" + str(traceback.format_exc()) + "```")
 
 # Use schedule to set up a recurrent checking
 schedule.every(1).minutes.do(refresh)
-schedule.every(24).hours.do(still_alive)
+schedule.every(30).minutes.do(still_alive)
 
 # Description of the service, that gets send once
-telegram_bot_sendtext("The bot script has started successfully. The bot checks every 1 minute, if there is something new at TooGoodToGo or Foodsi. Every 24 hours, the bots sends a \"still alive\" message.")
+telegram_bot_sendtext("The bot script has started successfully. The bot checks every 1 minute, if there is something new at TooGoodToGo.")
 refresh()
 while True:
     # run_pending
