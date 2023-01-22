@@ -1,0 +1,8 @@
+# Run script in the background
+nohup python script.py &
+
+# Find process ID
+ps ax | grep script.py
+
+# Kill process by ID || by name
+kill PID || pkill -f script.py

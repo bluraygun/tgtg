@@ -258,7 +258,7 @@ def refresh():
 
 # Use schedule to set up a recurrent checking
 schedule.every(1).minutes.do(refresh)
-schedule.every(30).minutes.do(still_alive)
+schedule.every(1).hours.do(still_alive)
 
 # Description of the service, that gets send once
 telegram_bot_sendtext("The bot script has started successfully. The bot checks every 1 minute, if there is something new at TooGoodToGo.")
